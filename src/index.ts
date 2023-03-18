@@ -1,82 +1,144 @@
-import puppeteer from "puppeteer-extra";
+// playwright-extra is a drop-in replacement for playwright,
+// it augments the installed playwright with plugin functionality
+import { chromium } from "playwright-extra";
+
+// Load the stealth plugin and use defaults (all tricks to hide playwright usage)
+// Note: playwright-extra is compatible with most puppeteer-extra plugins
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import { Browser, Builder, By, WebDriver, until } from "selenium-webdriver";
-import chrome from "selenium-webdriver/chrome";
-import { sleep } from "@minbao/promise-utils";
+import player from "play-sound";
+import notifier from "node-notifier";
+import { Page } from "@playwright/test";
 
-puppeteer.use(StealthPlugin());
+// Add the plugin to playwright (any number of plugins can be added)
+chromium.use(StealthPlugin());
 
-// (async function example() {
-//   let driver = await new Builder().forBrowser(Browser.FIREFOX).build();
-//   driver.manage().setTimeouts({ implicit: 10000 });
-//   const documentInitialised = () =>
-//     driver.executeScript("return document.readyState");
+// const beep = new Beep()
 
-//   try {
-//     await driver.get("https://otv.verwalt-berlin.de/ams/TerminBuchen?lang=en");
-
-//     (await driver.findElement(By.linkText("Book Appointment"))).click();
-
-//     await sleep(10000);
-
-//     (await driver.findElement(By.id("xi-cb-1"))).click();
-
-//     await sleep(10000);
-
-//     (
-//       await driver.findElement(By.id("applicationForm:managedForm:proceed"))
-//     ).click();
-
-//     await sleep(10000);
-
-//     (await driver.findElement(By.id("xi-sel-400"))).click();
-//   } finally {
-//     // await driver.quit();
-//   }
-// })();
-
-(async () => {
-  const browser = await puppeteer.launch({
-    headless: false,
-    timeout: 5000,
-  });
+// ...(the rest of the quickstart code example is the same)
+chromium.launch({ headless: false, slowMo: 1500 }).then(async (browser) => {
   const page = await browser.newPage();
 
-  await page.goto("https://otv.verwalt-berlin.de/ams/TerminBuchen?lang=en");
+  await page.goto("https://otv.verwalt-berlin.de/ams/TerminBuchen?lang=en", {
+    waitUntil: "networkidle",
+  });
 
-  await page.setViewport({ width: 1080, height: 1024 });
+  await page.getByRole("link", { name: "Book Appointment" }).click();
 
-  const bookAppointment = await page.waitForSelector("text/Book Appointment");
+  await page.check("#xi-cb-1");
 
-  await Promise.all([
-    bookAppointment?.click(),
-    page.waitForNavigation({ waitUntil: "networkidle0" }),
-  ]);
+  await page.getByRole("button", { name: "Next" }).click();
 
-  (await page.waitForSelector("#xi-cb-1"))?.click();
+  await page.selectOption("#xi-sel-400", { value: "436" });
+  await page
+    .getByRole("combobox", { name: "Citizenship *" })
+    .selectOption("India");
 
-  // Promise.all([
-  // page.waitForNavigation({ waitUntil: "networkidle0" }),
-  //   page.click(`text/Next`),
-  //   page.waitForNavigation({ waitUntil: "networkidle0" }),
-  // ]);
+  await page.selectOption("#xi-sel-422", "three people");
 
-  // await page.click("#applicationForm\:managedForm:proceed");
+  await page.selectOption("#xi-sel-427", "yes");
 
-  // await Promise.all([
-  // page.waitForNavigation(),
-  //   page.waitForSelector("#xi-sel-400"),
-  // ]);
+  await page.selectOption("#xi-sel-428", "India");
 
-  // await page.waitForSelector("xpath/#xi-cb-1");
+  await page.waitForLoadState("networkidle");
 
-  // await page.click("xpath/#xi-cb-1");
+  await page.getByText(/.*Extend a residence title.*/i).click();
 
-  // await page.waitForSelector("xpath/#applicationForm:managedForm:proceed");
+  await page.getByText(/.*Economic activity.*/i).click();
 
-  // await page.click("xpath/#applicationForm:managedForm:proceed");
+  await page
+    .getByText(/.*EU Blue Card \/ Blaue Karte EU \(sect. 18b para. 2\)*/i)
+    .click();
 
-  await page.screenshot({ path: "./sshot.png" });
+  for (let i = 1; ; i++) {
+    console.log(i);
+    try {
+      await page.getByRole("button", { name: "Next" }).click();
+    } catch (e) {
+      player().play("./beep.mp3");
+      break;
+    }
 
-  // await browser.close();
-})();
+    try {
+      await page
+        .getByText(
+          /.*There are currently no dates available for the selected service.*/
+        )
+        .click();
+    } catch (e) {
+      player().play("./beep.mp3");
+      break;
+    }
+  }
+
+  notifier.notify({ message: "Round complete" });
+
+  //   await browser.close();
+});
+
+async function start() {
+  const browser = await chromium.launch({ headless: false, slowMo: 1500 });
+
+  const page = await browser.newPage();
+
+  await page.goto("https://otv.verwalt-berlin.de/ams/TerminBuchen?lang=en", {
+    waitUntil: "networkidle",
+  });
+
+  await page.getByRole("link", { name: "Book Appointment" }).click();
+
+  await page.check("#xi-cb-1");
+
+  await page.getByRole("button", { name: "Next" }).click();
+
+  await page.selectOption("#xi-sel-400", { value: "436" });
+  await page
+    .getByRole("combobox", { name: "Citizenship *" })
+    .selectOption("India");
+
+  await page.selectOption("#xi-sel-422", "three people");
+
+  await page.selectOption("#xi-sel-427", "yes");
+
+  await page.selectOption("#xi-sel-428", "India");
+
+  await page.waitForLoadState("networkidle");
+
+  await page.getByText(/.*Extend a residence title.*/i).click();
+
+  await page.getByText(/.*Economic activity.*/i).click();
+
+  await page
+    .getByText(/.*EU Blue Card \/ Blaue Karte EU \(sect. 18b para. 2\)*/i)
+    .click();
+
+  return page;
+}
+
+async function next(page: Page) {
+  for (let i = 1; ; i++) {
+    console.log(i);
+    try {
+      await page.getByRole("button", { name: "Next" }).click();
+    } catch (e) {
+      throw e;
+    }
+
+    try {
+      await page
+        .getByText(
+          /.*There are currently no dates available for the selected service.*/
+        )
+        .click();
+    } catch (e) {
+      player().play("./beep.mp3");
+      break;
+    }
+  }
+}
+
+// (async () => {
+//   const page = await start();
+//   try {
+//     await next(page);
+//   } catch (e) {}
+// })();

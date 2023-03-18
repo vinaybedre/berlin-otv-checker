@@ -7,6 +7,7 @@ import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import player from "play-sound";
 import notifier from "node-notifier";
+import { Page } from "@playwright/test";
 
 // Add the plugin to playwright (any number of plugins can be added)
 chromium.use(StealthPlugin());
@@ -48,9 +49,14 @@ chromium.launch({ headless: false, slowMo: 1500 }).then(async (browser) => {
     .getByText(/.*EU Blue Card \/ Blaue Karte EU \(sect. 18b para. 2\)*/i)
     .click();
 
-  for (let i = 1; i <= 100; i++) {
+  for (let i = 1; ; i++) {
     console.log(i);
-    await page.getByRole("button", { name: "Next" }).click();
+    try {
+      await page.getByRole("button", { name: "Next" }).click();
+    } catch (e) {
+      player().play("./beep.mp3");
+      break;
+    }
 
     try {
       await page
@@ -60,10 +66,79 @@ chromium.launch({ headless: false, slowMo: 1500 }).then(async (browser) => {
         .click();
     } catch (e) {
       player().play("./beep.mp3");
+      break;
     }
   }
 
-  notifier.notify({ message: "Round complete", sound: "" });
+  notifier.notify({ message: "Round complete" });
 
   //   await browser.close();
 });
+
+async function start() {
+  const browser = await chromium.launch({ headless: false, slowMo: 1500 });
+
+  const page = await browser.newPage();
+
+  await page.goto("https://otv.verwalt-berlin.de/ams/TerminBuchen?lang=en", {
+    waitUntil: "networkidle",
+  });
+
+  await page.getByRole("link", { name: "Book Appointment" }).click();
+
+  await page.check("#xi-cb-1");
+
+  await page.getByRole("button", { name: "Next" }).click();
+
+  await page.selectOption("#xi-sel-400", { value: "436" });
+  await page
+    .getByRole("combobox", { name: "Citizenship *" })
+    .selectOption("India");
+
+  await page.selectOption("#xi-sel-422", "three people");
+
+  await page.selectOption("#xi-sel-427", "yes");
+
+  await page.selectOption("#xi-sel-428", "India");
+
+  await page.waitForLoadState("networkidle");
+
+  await page.getByText(/.*Extend a residence title.*/i).click();
+
+  await page.getByText(/.*Economic activity.*/i).click();
+
+  await page
+    .getByText(/.*EU Blue Card \/ Blaue Karte EU \(sect. 18b para. 2\)*/i)
+    .click();
+
+  return page;
+}
+
+async function next(page: Page) {
+  for (let i = 1; ; i++) {
+    console.log(i);
+    try {
+      await page.getByRole("button", { name: "Next" }).click();
+    } catch (e) {
+      throw e;
+    }
+
+    try {
+      await page
+        .getByText(
+          /.*There are currently no dates available for the selected service.*/
+        )
+        .click();
+    } catch (e) {
+      player().play("./beep.mp3");
+      break;
+    }
+  }
+}
+
+// (async () => {
+//   const page = await start();
+//   try {
+//     await next(page);
+//   } catch (e) {}
+// })();
